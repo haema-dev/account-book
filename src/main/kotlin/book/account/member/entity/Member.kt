@@ -1,14 +1,13 @@
-package book.account.user.entity
+package book.account.member.entity
 
 import jakarta.persistence.*
 import org.jetbrains.annotations.NotNull
-import java.util.*
 
 @Entity
-data class User(
-    @NotNull
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var id: UUID,
+data class Member(
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    var id: Long? = null,
     @NotNull
     var name: String,
     @NotNull

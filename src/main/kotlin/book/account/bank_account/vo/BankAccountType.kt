@@ -1,7 +1,7 @@
-package book.account.account.vo
+package book.account.bank_account.vo
 
 
-enum class AccountType {
+enum class BankAccountType {
     CHECKING, //일반 저축
     DEPOSIT, //적금 및 예금
     RETIREMENT, //퇴직
