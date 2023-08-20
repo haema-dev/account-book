@@ -1,4 +1,4 @@
-package book.account.account.vo
+package book.account.bank_account.vo
 
 
 class BankType {

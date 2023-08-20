@@ -1,17 +1,15 @@
-package book.account.account.entity
+package book.account.bank_account.entity
 
-import book.account.account.vo.AccountType
+import book.account.bank_account.vo.BankAccountType
 import jakarta.persistence.*
-import org.jetbrains.annotations.NotNull
 
 @Entity
-data class Account (
-    @NotNull
+data class BankAccount (
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    var bankCode: String,
+    var bankCode: Long? = null,
     var accountNumber: String,
     var accountName: String,
 
     @Enumerated(EnumType.STRING) // Enum을 문자열로 저장
-    var accountType: AccountType
+    var bankAccountType: BankAccountType
 )
