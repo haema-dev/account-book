@@ -2,6 +2,11 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 // gradle 에서 yml 을 읽어오기 위한 설정
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
+// application.yml 파일을 주입시키기 위한 설정
+import org.yaml.snakeyaml.Yaml
+import java.io.FileInputStream
+import org.jooq.meta.jaxb.Logging
+
 // CompileTime 이 아닌 Runtime 시에 동작하므로 buildscript 에 의존성 추가
 // Gradle 초기 설정 단계에서 클래스 경로가 설정되어야 하므로 buildscript 블록은 스크립트 파일의 상단에 위치
 buildscript {
@@ -18,6 +23,8 @@ plugins {
 	kotlin("jvm") version "1.8.22"
 	kotlin("plugin.spring") version "1.8.22"
 	kotlin("plugin.jpa") version "1.8.22"
+
+	id("nu.studer.jooq") version "8.2"
 }
 
 group = "book"
@@ -43,8 +50,6 @@ sourceSets {
 	}
 }
 
-
-
 repositories {
 	mavenCentral()
 }
@@ -66,11 +71,57 @@ dependencies {
 	implementation("com.fasterxml.jackson.core:jackson-databind:2.15.0")
 	implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.0")
 
+	// Jooq
+	jooqGenerator ("org.postgresql:postgresql:42.5.1")
+
 	// Test
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
+// sourceSets 설정 다음 yml 파일 읽기
+val yaml = Yaml()
+val config = yaml.load<Map<String, Any>>(FileInputStream(File("security-module/account-bank/src/main/resources/application.yml")))
+val spring = config["spring"] as? Map<String, Any>
+val datasource = spring?.get("datasource") as? Map<String, Any>
+
+jooq {
+	version.set("3.18.4")
+	configurations {
+		create("main") {
+			generateSchemaSourceOnCompilation.set(true)
+			jooqConfiguration.apply {
+				logging = Logging.WARN
+				jdbc.apply {
+					driver = datasource?.get("driver-class-name")?.toString() ?: "org.postgresql.Driver"
+					url = datasource?.get("url")?.toString() ?: "jdbc:postgresql://localhost:5432/your_db"
+					user = datasource?.get("username")?.toString() ?: "postgres"
+					password = datasource?.get("password")?.toString() ?: "password"
+				}
+				generator.apply {
+					name = "org.jooq.codegen.KotlinGenerator"
+					database.apply {
+						name = "org.jooq.meta.postgres.PostgresDatabase"
+						inputSchema = "public"
+					}
+					generate.apply {
+						isDeprecated = false
+						isKotlinSetterJvmNameAnnotationsOnIsPrefix = true
+						isPojosAsKotlinDataClasses = true
+						isFluentSetters = true
+					}
+					target.apply {
+						packageName = "book.account"
+						directory = "build/generated-src/jooq/main"
+					}
+					strategy.name = "org.jooq.codegen.DefaultGeneratorStrategy"
+				}
+			}
+		}
+	}
+}
+
 tasks.withType<KotlinCompile> {
+	dependsOn("generateJooq") // build 될 때 jooq 스키마 생성
 	kotlinOptions {
 		freeCompilerArgs += "-Xjsr305=strict"
 		jvmTarget = "17"
@@ -85,6 +136,10 @@ tasks.register("readYaml") {
 		val config: Map<*, *> = mapper.readValue(file, Map::class.java)
 		println(config)
 	}
+}
+
+tasks.named("bootRun") {  // 여기 추가
+	dependsOn("generateJooq")
 }
 
 tasks.withType<Test> {

@@ -5,16 +5,16 @@ Creating My Household Budget by using Kotlin
 - Spring Boot
 - Kotlin
 - JPA
+- Jooq
 
 ### DB
-- PostgresSQL (Local)
+- PostgresSQL
 
 ### Documentation
 - Swagger : http://localhost:8080/swagger-ui.html
 
-### Open API
-- ???
-
 ### Error
 git add error : git config --global core.autocrlf true
 
+### Command
+./gradlew generateJooq
