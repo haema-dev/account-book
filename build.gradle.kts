@@ -1,14 +1,12 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-// gradle 에서 yml 을 읽어오기 위한 설정
+// Configuration to read the YAML file in Gradle
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-// application.yml 파일을 주입시키기 위한 설정
-import org.yaml.snakeyaml.Yaml
-import java.io.FileInputStream
+// Jooq Logging settings
 import org.jooq.meta.jaxb.Logging
 
-// CompileTime 이 아닌 Runtime 시에 동작하므로 buildscript 에 의존성 추가
-// Gradle 초기 설정 단계에서 클래스 경로가 설정되어야 하므로 buildscript 블록은 스크립트 파일의 상단에 위치
+// The functionality operates at Runtime, not Compiletime, so dependencies must be added to the buildscript
+// The class path needs to be configured during the initial Gradle setup stage, so the buildscript block should be placed at the top of the script file
 buildscript {
 	dependencies {
 		classpath("com.fasterxml.jackson.core:jackson-databind:2.15.0")
@@ -16,6 +14,29 @@ buildscript {
 	}
 }
 
+// Version & yml path information
+object BuildConfig {
+	object Project {
+		const val GROUP = "book"
+		const val VERSION = "0.0.1-SNAPSHOT"
+		const val JVM_TARGET = "17"
+	}
+
+	object Versions {
+		const val KOTLIN = "1.8.22"
+		const val SPRING_BOOT = "3.1.2"
+		const val SPRING_DEPENDENCY = "1.1.2"
+		const val JOOQ = "8.2"
+		const val OPENAPI_KOTLIN = "1.7.0"
+		const val OPENAPI_STARTER = "2.1.0"
+		const val POSTGRESQL = "42.5.1"
+		const val JACKSON = "2.15.0"
+	}
+
+	object Paths { const val CONFIG_PATH = "security-module/account-bank/src/main/resources/application.yml" }
+}
+
+// Plugin Configuration
 plugins {
 	id("org.springframework.boot") version "3.1.2"
 	id("io.spring.dependency-management") version "1.1.2"
@@ -27,20 +48,13 @@ plugins {
 	id("nu.studer.jooq") version "8.2"
 }
 
-group = "book"
-version = "0.0.1-SNAPSHOT"
+// project settings
+group = BuildConfig.Project.GROUP
+version = BuildConfig.Project.VERSION
+java { sourceCompatibility = JavaVersion.VERSION_17 }
+configurations { compileOnly { extendsFrom(configurations.annotationProcessor.get()) } }
 
-java {
-	sourceCompatibility = JavaVersion.VERSION_17
-}
-
-configurations {
-	compileOnly {
-		extendsFrom(configurations.annotationProcessor.get())
-	}
-}
-
-// 메인 프로젝트와 경로를 맞춰줘야 런타임 시에 정상적으로 주입이 된다
+// Resource directory paths must match the main project structure for proper YAML configuration injection at runtime
 sourceSets {
 	main {
 		resources {
@@ -50,90 +64,157 @@ sourceSets {
 	}
 }
 
-repositories {
-	mavenCentral()
+// Configures the Maven Central repository as the primary source for downloading dependencies
+repositories { mavenCentral() }
+
+// Declares the external libraries and frameworks required by the project
+object DependencyManagement {
+	private val springBoot = listOf(
+		"org.springframework.boot:spring-boot-starter-data-jpa",
+		"org.springframework.boot:spring-boot-starter-web",
+		"com.fasterxml.jackson.module:jackson-module-kotlin",
+		"org.jetbrains.kotlin:kotlin-reflect"
+	)
+
+	private val swagger = listOf(
+		"org.springdoc:springdoc-openapi-starter-webmvc-ui:${BuildConfig.Versions.OPENAPI_STARTER}"
+	)
+
+	private val jackson = listOf(
+		"com.fasterxml.jackson.core:jackson-databind:${BuildConfig.Versions.JACKSON}",
+		"com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${BuildConfig.Versions.JACKSON}"
+	)
+
+	val implementation = springBoot + swagger + jackson
+
+	val runtimeOnly = listOf(
+		"org.postgresql:postgresql",
+		"org.springdoc:springdoc-openapi-kotlin:${BuildConfig.Versions.OPENAPI_KOTLIN}"
+	)
+
+	val jooqGenerator = listOf(
+		"org.postgresql:postgresql:${BuildConfig.Versions.POSTGRESQL}"
+	)
+
+	val test = listOf(
+		"org.springframework.boot:spring-boot-starter-test"
+	)
 }
 
 dependencies {
-	// dependency-management 가 관리하므로 버전 명시할 필요 없음
-	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-	implementation("org.springframework.boot:spring-boot-starter-web")
-	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-	implementation("org.jetbrains.kotlin:kotlin-reflect")
-	// Database PostgresSQL
-	runtimeOnly("org.postgresql:postgresql")
-
-	// Swagger
-	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0") // openApi 와 SwaggerUI 를 통합하기 위해 추가
-	runtimeOnly("org.springdoc:springdoc-openapi-kotlin:1.7.0") // kotlin 으로 해석하기 위해 추가
-
-	// Jackson Yaml
-	implementation("com.fasterxml.jackson.core:jackson-databind:2.15.0")
-	implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.0")
-
-	// Jooq
-	jooqGenerator ("org.postgresql:postgresql:42.5.1")
-
-	// Test
-	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	DependencyManagement.implementation.forEach { implementation(it) }
+	DependencyManagement.runtimeOnly.forEach { runtimeOnly(it) }
+	DependencyManagement.jooqGenerator.forEach { jooqGenerator(it) }
+	DependencyManagement.test.forEach { testImplementation(it) }
 }
 
-// sourceSets 설정 다음 yml 파일 읽기
-val yaml = Yaml()
-val config = yaml.load<Map<String, Any>>(FileInputStream(File("security-module/account-bank/src/main/resources/application.yml")))
-val spring = config["spring"] as? Map<String, Any>
-val datasource = spring?.get("datasource") as? Map<String, Any>
+// YAML configuration file path
+internal val applicationYamlPath = BuildConfig.Paths.CONFIG_PATH
 
-jooq {
-	version.set("3.18.4")
-	configurations {
-		create("main") {
-			generateSchemaSourceOnCompilation.set(true)
-			jooqConfiguration.apply {
-				logging = Logging.WARN
-				jdbc.apply {
-					driver = datasource?.get("driver-class-name")?.toString() ?: "org.postgresql.Driver"
-					url = datasource?.get("url")?.toString() ?: "jdbc:postgresql://localhost:5432/your_db"
-					user = datasource?.get("username")?.toString() ?: "postgres"
-					password = datasource?.get("password")?.toString() ?: "password"
-				}
-				generator.apply {
-					name = "org.jooq.codegen.KotlinGenerator"
-					database.apply {
-						name = "org.jooq.meta.postgres.PostgresDatabase"
-						inputSchema = "public"
+// Classes for application and JOOQ configuration
+class AppConfig {
+	var dataSourceConfig: DataSourceConfig = DataSourceConfig()
+	var jpaConfig: JpaConfig = JpaConfig()
+}
+
+class DataSourceConfig {
+	var driverClassName: String = ""
+	var url: String = ""
+	var username: String = ""
+	var password: String = ""
+}
+
+class JpaConfig {
+	var properties: Properties = Properties()
+	var hibernate: Hibernate = Hibernate()
+	var showSql: Boolean = false
+
+	class Properties {
+		var hibernateProperties: HibernateProperties = HibernateProperties()
+	}
+
+	class HibernateProperties {
+		var dialect: String = ""
+	}
+
+	class Hibernate {
+		var ddlAuto: String = ""
+	}
+}
+
+class JooqGeneratorConfig {
+	val inputSchema: String = "public"
+	val packageName: String = "book.account"
+	val directory: String = "${project.buildDir}/generated-src/jooq/main"
+}
+
+// Read YAML configuration file
+fun readYamlConfig(): Map<*, *>? {
+	val file = File(applicationYamlPath)
+	val mapper = ObjectMapper(YAMLFactory())
+	return mapper.readValue(file, Map::class.java)
+}
+
+// Configure JOOQ settings
+fun configureJooq(config: AppConfig, generatorConfig: JooqGeneratorConfig) {
+	jooq {
+		version.set("3.18.4")
+		configurations {
+			create("main") {
+				generateSchemaSourceOnCompilation.set(true)
+				jooqConfiguration.apply {
+					logging = Logging.WARN
+					jdbc.apply {
+						driver = config.dataSourceConfig.driverClassName
+						url = config.dataSourceConfig.url
+						user = config.dataSourceConfig.username
+						password = config.dataSourceConfig.password
 					}
-					generate.apply {
-						isDeprecated = false
-						isKotlinSetterJvmNameAnnotationsOnIsPrefix = true
-						isPojosAsKotlinDataClasses = true
-						isFluentSetters = true
+					generator.apply {
+						name = "org.jooq.codegen.KotlinGenerator"
+						database.apply {
+							name = "org.jooq.meta.postgres.PostgresDatabase"
+							inputSchema = generatorConfig.inputSchema
+						}
+						generate.apply {
+							isDeprecated = false
+							isKotlinSetterJvmNameAnnotationsOnIsPrefix = true
+							isPojosAsKotlinDataClasses = true
+							isFluentSetters = true
+						}
+						target.apply {
+							packageName = generatorConfig.packageName
+							directory = generatorConfig.directory
+						}
+						strategy.name = "org.jooq.codegen.DefaultGeneratorStrategy"
 					}
-					target.apply {
-						packageName = "book.account"
-						directory = "build/generated-src/jooq/main"
-					}
-					strategy.name = "org.jooq.codegen.DefaultGeneratorStrategy"
 				}
 			}
 		}
 	}
 }
 
+// Load YAML configuration and configure JOOQ
+val config = readYamlConfig()
+val spring = config?.get("spring") as? Map<String, Any>
+val datasource = spring?.get("datasource") as? Map<String, Any>
+
+val appConfig = AppConfig()
+val jooqConfig = JooqGeneratorConfig()
+configureJooq(appConfig, jooqConfig)
+
 tasks.withType<KotlinCompile> {
 	dependsOn("generateJooq") // build 될 때 jooq 스키마 생성
 	kotlinOptions {
 		freeCompilerArgs += "-Xjsr305=strict"
-		jvmTarget = "17"
+		jvmTarget = BuildConfig.Project.JVM_TARGET
 	}
 }
 
 // gradle 에서 yml 을 읽어오기 위한 설정
 tasks.register("readYaml") {
 	doLast {
-		val file = File("security-module/account-bank/src/main/resources/application.yml")
-		val mapper = ObjectMapper(YAMLFactory())
-		val config: Map<*, *> = mapper.readValue(file, Map::class.java)
+		val config = readYamlConfig()
 		println(config)
 	}
 }
