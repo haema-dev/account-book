@@ -138,7 +138,7 @@ tasks.register("readYaml") {
 	}
 }
 
-tasks.named("bootRun") {  // 여기 추가
+tasks.named("bootRun") {
 	dependsOn("generateJooq")
 }
 
