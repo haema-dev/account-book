@@ -1,14 +1,15 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-// gradle 에서 yml 을 읽어오기 위한 설정
+// Configuration to read the YAML file in Gradle
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 // application.yml 파일을 주입시키기 위한 설정
 import org.yaml.snakeyaml.Yaml
 import java.io.FileInputStream
+// Jooq Logging settings
 import org.jooq.meta.jaxb.Logging
 
-// CompileTime 이 아닌 Runtime 시에 동작하므로 buildscript 에 의존성 추가
-// Gradle 초기 설정 단계에서 클래스 경로가 설정되어야 하므로 buildscript 블록은 스크립트 파일의 상단에 위치
+// The functionality operates at Runtime, not Compiletime, so dependencies must be added to the buildscript
+// The class path needs to be configured during the initial Gradle setup stage, so the buildscript block should be placed at the top of the script file
 buildscript {
 	dependencies {
 		classpath("com.fasterxml.jackson.core:jackson-databind:2.15.0")
@@ -33,7 +34,6 @@ object BuildConfig {
 		const val POSTGRESQL = "42.5.1"
 		const val JACKSON = "2.15.0"
 	}
-	object Paths { const val CONFIG_PATH = "security-module/account-bank/src/main/resources/application.yml" }
 }
 
 plugins {
@@ -47,20 +47,13 @@ plugins {
 	id("nu.studer.jooq") version "8.2"
 }
 
-group = "book"
-version = "0.0.1-SNAPSHOT"
+// project settings
+group = BuildConfig.Project.GROUP
+version = BuildConfig.Project.VERSION
+java { sourceCompatibility = JavaVersion.VERSION_17 }
+configurations { compileOnly { extendsFrom(configurations.annotationProcessor.get()) } }
 
-java {
-	sourceCompatibility = JavaVersion.VERSION_17
-}
-
-configurations {
-	compileOnly {
-		extendsFrom(configurations.annotationProcessor.get())
-	}
-}
-
-// 메인 프로젝트와 경로를 맞춰줘야 런타임 시에 정상적으로 주입이 된다
+// Resource directory paths must match the main project structure for proper YAML configuration injection at runtime
 sourceSets {
 	main {
 		resources {
@@ -69,35 +62,10 @@ sourceSets {
 		}
 	}
 }
+// Configures the Maven Central repository as the primary source for downloading dependencies
+repositories { mavenCentral() }
 
-repositories {
-	mavenCentral()
-}
-
-//dependencies {
-//	// dependency-management 가 관리하므로 버전 명시할 필요 없음
-//	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-//	implementation("org.springframework.boot:spring-boot-starter-web")
-//	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-//	implementation("org.jetbrains.kotlin:kotlin-reflect")
-//	// Database PostgresSQL
-//	runtimeOnly("org.postgresql:postgresql")
-//
-//	// Swagger
-//	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.1.0") // openApi 와 SwaggerUI 를 통합하기 위해 추가
-//	runtimeOnly("org.springdoc:springdoc-openapi-kotlin:1.7.0") // kotlin 으로 해석하기 위해 추가
-//
-//	// Jackson Yaml
-//	implementation("com.fasterxml.jackson.core:jackson-databind:2.15.0")
-//	implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.15.0")
-//
-//	// Jooq
-//	jooqGenerator ("org.postgresql:postgresql:42.5.1")
-//
-//	// Test
-//	testImplementation("org.springframework.boot:spring-boot-starter-test")
-//}
-
+// Declares the external libraries and frameworks required by the project
 object DependencyManagement {
 	private val springBoot = listOf(
 		"org.springframework.boot:spring-boot-starter-data-jpa",
@@ -145,6 +113,7 @@ val config: Map<String, Any> = yaml.load(FileInputStream(File("security-module/a
 val spring = config["spring"] as? Map<String, Any>
 val datasource = spring?.get("datasource") as? Map<String, Any>
 
+// Direct Configure JOOQ settings
 jooq {
 	version.set("3.18.4")
 	configurations {
